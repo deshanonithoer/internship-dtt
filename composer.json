@@ -1,0 +1,12 @@
+{
+  "name": "dttmultimedia/web_intern_test_setup",
+  "description": "Plain PHP project setup for the intern test",
+  "autoload": {
+    "psr-4": {
+      "App\\": "App/"
+    }
+  },
+  "require": {
+    "bramus/router": "^1.6"
+  }
+}
