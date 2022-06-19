@@ -52,10 +52,20 @@ class Db implements IDb
     public function executeQuery(string $query, array $bind = []): bool
     {
         $this->stmt = $this->connection->prepare($query);
-        if ($bind) {
-            return $this->stmt->execute($bind);
-        }
+        if ($bind) return $this->stmt->execute($bind);
         return $this->stmt->execute();
+    }
+    
+    /**
+     * @param string $query
+     * @param array $bind
+     * @return array
+     */
+    public function fetchQuery(string $query, array $bind = []): array
+    {
+        $this->stmt = $this->connection->prepare($query);
+        ($bind) ? $this->stmt->execute($bind) : $this->stmt->execute();
+        return $this->stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
     /**

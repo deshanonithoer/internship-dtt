@@ -13,6 +13,12 @@ interface IDb
     public function executeQuery(string $query, array $bind = []): bool;
 
     /**
+     * Function to execute a query and return the result
+     * @return bool
+     */
+    public function fetchQuery(string $query, array $bind= []): array;
+
+    /**
      * Function to retrieve the last inserted id
      * @return int
      */

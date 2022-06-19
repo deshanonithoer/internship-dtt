@@ -9,7 +9,6 @@ class IndexController extends BaseController
 {
     public function index()
     {
-        // Return OK:
-        return (new Status\Ok(['message' => 'Hello world!']))->send();
+        return (new Status\Ok(['message' => "Welcome to my Rest API. Start by using: /facility"]))->send();
     }
 }
