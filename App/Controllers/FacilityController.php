@@ -219,15 +219,16 @@ class FacilityController extends BaseController {
             // Check if location exists
             $existingLocation = $this->db->fetchQuery("
                 SELECT * FROM location 
-                WHERE city = ? AND address = ? AND zip_code = ? 
-                AND country = ? AND phone_number = ?", [
-                    $data->location->city, 
-                    $data->location->address,
-                    $data->location->zip_code,
-                    $data->location->country,
-                    $data->location->phone_number
+                WHERE LOWER(city) LIKE ? AND LOWER(address) LIKE ? AND LOWER(zip_code) LIKE ? 
+                AND LOWER(country) LIKE ? AND LOWER(phone_number) LIKE ?", [
+                    strtolower($data->location->city), 
+                    strtolower($data->location->address),
+                    strtolower($data->location->zip_code),
+                    strtolower($data->location->country),
+                    strtolower($data->location->phone_number)
                 ]);
 
+            // If the location doens't exist, create it
             if (count($existingLocation) == 0) {
                 $this->db->executeQuery("INSERT INTO location (city, address, zip_code, country, phone_number) VALUES (?, ?, ?, ?, ?)", [
                     $data->location->city, 
@@ -243,7 +244,6 @@ class FacilityController extends BaseController {
             }
         }
 
-        echo 123;
         return true;
     }
 }
