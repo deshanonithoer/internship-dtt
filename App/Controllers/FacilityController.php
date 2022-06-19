@@ -78,6 +78,10 @@ class FacilityController extends BaseController {
             // Insert the location if needed
             $location = $this->insertLocation($data);
 
+            // Check if the facility already exists
+            $result = $this->db->fetchQuery("SELECT * FROM facility WHERE name = ? AND location_id = ?", [$data->name, $location]);
+            if (count($result) > 0) return (new Status\BadRequest("Facility already exists!"))->send();
+
             // Insert the facility
             $result = $this->db->executeQuery("INSERT INTO facility (name, location_id) VALUES (?, ?)", [$data->name, $location]); 
             $newFacilityId = $this->db->getLastInsertedId();  
@@ -88,7 +92,7 @@ class FacilityController extends BaseController {
 
             return (new Status\Ok(['completed' => $result]))->send();
         } catch (\Exception $e) {
-            return (new Status\BadRequest(['message' => $e]))->send();
+            return (new Status\BadRequest(['message' => 'Invalid JSON']))->send();
         }
     }
 
@@ -211,6 +215,11 @@ class FacilityController extends BaseController {
         return true;
     }
 
+    /**
+     * Function to insert the location if needed
+     * @param object $data
+     * @return int
+     */
     private function insertLocation(object $data): bool|int {
         if (property_exists($data, "location")) {
             $validate = $this->validateData($data->location, ["city", "country", "address", "zip_code", "phone_number"]);
