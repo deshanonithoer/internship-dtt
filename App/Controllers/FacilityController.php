@@ -6,9 +6,39 @@ use App\Plugins\Http\Response as Status;
 use App\Plugins\Http\Exceptions;
 
 class FacilityController extends BaseController {
+    /**
+     * Function to retrieve all facilities
+     * @return \App\Plugins\Http\Response
+     */
     public function index() {
         try {
-            $result = $this->db->fetchQuery("SELECT * FROM facility");
+            $search = [
+                "location" => "city", 
+                "facility" => "name",
+                "tag" => "name"
+            ];
+            
+            $query = "";
+            $params = [];
+
+            // Build the query
+            foreach($search as $key => $column){
+                if (isset($_GET[$key])) {
+                    $query .= " AND " . $key . "." . $column . " LIKE ?";
+                    $params[] = "%" . $_GET[$key] . "%";
+                } 
+            }
+
+            $result = $this->db->fetchQuery("
+                SELECT 
+                    facility.*,
+                    location.city 
+                FROM facility
+                LEFT JOIN location ON facility.location_id = location.id
+                LEFT JOIN facilitytag ON facility.id = facilitytag.facility_id
+                LEFT JOIN tag ON facilitytag.tag_id = tag.id
+                WHERE 1 = 1 " . $query, $params);
+
             $result = $this->getTags($result);
 
             return (new Status\Ok($result))->send();
@@ -17,7 +47,12 @@ class FacilityController extends BaseController {
         }
     }
 
-    public function show($id) {
+    /**
+     * Function to retrieve a facility by id
+     * @param int $id
+     * @return \App\Plugins\Http\Response
+     */
+    public function show(int $id) {
         try {
             $result = $this->db->fetchQuery("SELECT * FROM facility WHERE id = ?", [$id]);
             $result = $this->getTags($result);
@@ -27,16 +62,24 @@ class FacilityController extends BaseController {
         }
     }
 
+    /**
+     * Function to create a new facility with the corresponding tags
+     * @param array $data
+     * @return \App\Plugins\Http\Response
+     */
     public function store() {
         $data = json_decode(file_get_contents('php://input'));
         
         try {
             // Validate the post data
-            $validate = $this->validateData($data, ["name", "location_id"]);
+            $validate = $this->validateData($data, ["name", "location"]);
             if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required!"))->send();
 
+            // Insert the location if needed
+            $location = $this->insertLocation($data);
+
             // Insert the facility
-            $result = $this->db->executeQuery("INSERT INTO facility (name, location_id) VALUES (?, ?)", [$data->name, $data->location_id]); 
+            $result = $this->db->executeQuery("INSERT INTO facility (name, location_id) VALUES (?, ?)", [$data->name, $location]); 
             $newFacilityId = $this->db->getLastInsertedId();  
 
             // Handle the tags
@@ -45,11 +88,17 @@ class FacilityController extends BaseController {
 
             return (new Status\Ok(['completed' => $result]))->send();
         } catch (\Exception $e) {
-            return (new Status\BadRequest(['message' => 'Invalid JSON']))->send();
+            return (new Status\BadRequest(['message' => $e]))->send();
         }
     }
 
-    public function update($id) {
+    /**
+     * Function to update a facility by id
+     * @param int $id
+     * @param array $data
+     * @return \App\Plugins\Http\Response
+     */
+    public function update(int $id) {
         $data = json_decode(file_get_contents('php://input'));
 
         try {
@@ -70,7 +119,12 @@ class FacilityController extends BaseController {
         }
     }
 
-    public function destroy($id) {
+    /**
+     * Function to delete a facility by id
+     * @param int $id
+     * @return \App\Plugins\Http\Response
+     */
+    public function destroy(int $id) {
         try {
             $result = $this->db->executeQuery("DELETE FROM facility WHERE id = ?", [$id]);
             return (new Status\Ok(['completed' => $result]))->send();
@@ -142,7 +196,9 @@ class FacilityController extends BaseController {
                         $tagId = $existingTag[0]["id"];
                     }
 
-                    $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $tagId]);
+                    // Check if row exists
+                    $existingRow = $this->db->fetchQuery("SELECT * FROM facilitytag WHERE facility_id = ? AND tag_id = ?", [$facilityId, $tagId]);
+                    if (count($existingRow) == 0) $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $tagId]);
                 } catch (\Exception $e) {
                     $this->db->rollBack();
                     return $tag;
@@ -152,6 +208,42 @@ class FacilityController extends BaseController {
             $this->db->commit();
         }
 
+        return true;
+    }
+
+    private function insertLocation(object $data): bool|int {
+        if (property_exists($data, "location")) {
+            $validate = $this->validateData($data->location, ["city", "country", "address", "zip_code", "phone_number"]);
+            if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required for the creation of a new location!"))->send();
+
+            // Check if location exists
+            $existingLocation = $this->db->fetchQuery("
+                SELECT * FROM location 
+                WHERE city = ? AND address = ? AND zip_code = ? 
+                AND country = ? AND phone_number = ?", [
+                    $data->location->city, 
+                    $data->location->address,
+                    $data->location->zip_code,
+                    $data->location->country,
+                    $data->location->phone_number
+                ]);
+
+            if (count($existingLocation) == 0) {
+                $this->db->executeQuery("INSERT INTO location (city, address, zip_code, country, phone_number) VALUES (?, ?, ?, ?, ?)", [
+                    $data->location->city, 
+                    $data->location->address,
+                    $data->location->zip_code,
+                    $data->location->country,
+                    $data->location->phone_number
+                ]);
+
+                return $this->db->getLastInsertedId();
+            } else {
+                return $existingLocation[0]["id"];
+            }
+        }
+
+        echo 123;
         return true;
     }
 }
