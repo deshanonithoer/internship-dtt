@@ -25,7 +25,7 @@ class FacilityController extends BaseController {
             foreach($search as $key => $column){
                 if (isset($_GET[$key])) {
                     $query .= " AND " . $key . "." . $column . " LIKE ?";
-                    $params[] = "%" . $_GET[$key] . "%";
+                    $params[] = "%" . filter_var($_GET[$key], FILTER_SANITIZE_FULL_SPECIAL_CHARS) . "%";
                 } 
             }
 
@@ -37,7 +37,9 @@ class FacilityController extends BaseController {
                 LEFT JOIN location ON facility.location_id = location.id
                 LEFT JOIN facilitytag ON facility.id = facilitytag.facility_id
                 LEFT JOIN tag ON facilitytag.tag_id = tag.id
-                WHERE 1 = 1 " . $query, $params);
+                WHERE 1 = 1 " . $query . "
+                GROUP BY facility.id"
+                , $params);
 
             $result = $this->getTags($result);
 
@@ -110,8 +112,11 @@ class FacilityController extends BaseController {
             $validate = $this->validateData($data, ["name", "location_id"]);
             if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required!"))->send();
 
+            // Insert the location if needed
+            $location = $this->insertLocation($data);
+
             // Update the facility
-            $result = $this->db->executeQuery("UPDATE facility SET name = ?, location_id = ? WHERE id = ?", [$data->name, $data->location_id, $id]);
+            $result = $this->db->executeQuery("UPDATE facility SET name = ?, location_id = ? WHERE id = ?", [$data->name, $location, $id]);
 
             // Handle the tags
             $handleTags = $this->insertTags($data, $id);
@@ -192,8 +197,10 @@ class FacilityController extends BaseController {
 
             foreach($data->tags as $tag){
                 try {
+                    // Check if the tag already exists
                     $existingTag = $this->db->fetchQuery("SELECT * FROM tag WHERE name = ?", [trim($tag)]);
                     if (!$existingTag) {
+                        // Insert the tag if it does not exists
                         $this->db->executeQuery("INSERT INTO tag (name) VALUES (?)", [trim($tag)]);
                         $tagId = $this->db->getLastInsertedId();
                     } else {
@@ -220,7 +227,7 @@ class FacilityController extends BaseController {
      * @param object $data
      * @return int
      */
-    private function insertLocation(object $data): bool|int {
+    private function insertLocation(object $data, bool $update = false): bool|int {
         if (property_exists($data, "location")) {
             $validate = $this->validateData($data->location, ["city", "country", "address", "zip_code", "phone_number"]);
             if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required for the creation of a new location!"))->send();

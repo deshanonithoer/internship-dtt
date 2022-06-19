@@ -3,18 +3,31 @@
 $router->get('', App\Controllers\IndexController::class . '@index');
 
 $router->mount('/facility', function () use ($router) {
-    // Fetch all facilities (with filters)
+    /**
+     * Fetch all facilities (with filters)
+     */
     $router->get('', App\Controllers\FacilityController::class . '@index');
 
-    // Fetch a facility by id
+    /**
+     * Fetch a single facility
+     * @param int $id
+     */
     $router->get('/{id}', App\Controllers\FacilityController::class . '@show');
 
-    // Create a new facility
+    /**
+     * Create a new facility
+     */
     $router->post('', App\Controllers\FacilityController::class . '@store');
 
-    // Update a facility by id
+    /**
+     * Update a facility
+     * @param int $id
+     */
     $router->put('/{id}', App\Controllers\FacilityController::class . '@update');
 
-    // Delete a facility by id
+    /**
+     * Delete a facility
+     * @param int $id
+     */
     $router->delete('/{id}', App\Controllers\FacilityController::class . '@destroy');
 });
