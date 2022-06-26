@@ -27,7 +27,10 @@ class FacilityController extends BaseController {
                 continue;
             }
 
+            /* The tabel and column are injection through my own array ($search) */
             $query .= " AND " . $key . "." . $column . " LIKE ?";
+
+            /* The user input is being sanitized and bound as a parameter */
             $params[] = "%" . filter_var($_GET[$key], FILTER_SANITIZE_FULL_SPECIAL_CHARS) . "%";
         }
 
@@ -76,14 +79,18 @@ class FacilityController extends BaseController {
         
         /* Validate the post data */
         $validate = $this->validateObject($data, ["name", "location"]);
-        if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        if ($validate !== true) {
+            return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        }
 
         /* Insert the location if needed */
         $location = $this->insertLocation($data);
 
         /* Check if the facility already exists */
         $result = $this->db->fetchQuery("SELECT * FROM facility WHERE name = ? AND location_id = ?", [$data->name, $location]);
-        if (count($result) > 0) return (new Status\BadRequest("Facility already exists!"))->send();
+        if (count($result) > 0) {
+            return (new Status\BadRequest("Facility already exists!"))->send();
+        }
 
         /* Insert the facility */
         $result = $this->db->executeQuery("INSERT INTO facility (name, location_id) VALUES (?, ?)", [$data->name, $location]); 
@@ -91,7 +98,9 @@ class FacilityController extends BaseController {
 
         /* Handle the tags */
         $handleTags = $this->insertFacilityTags($data, $newFacilityId);
-        if ($handleTags !== true) return (new Exceptions\InternalServerError("Something went wrong inserting the tag: " . $handleTags))->send();
+        if ($handleTags !== true) {
+            return (new Exceptions\InternalServerError("Something went wrong inserting the tag: " . $handleTags))->send();
+        }
 
         $status = new Status\Ok(['completed' => $result]);
         $status->send();
@@ -109,7 +118,9 @@ class FacilityController extends BaseController {
 
         /* Validate the post data */
         $validate = $this->validateObject($data, ["name", "location_id"]);
-        if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        if ($validate !== true) {
+            return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        }
 
         /* Insert the location if needed */
         $location = $this->insertLocation($data);
@@ -119,7 +130,9 @@ class FacilityController extends BaseController {
 
         /* Handle the tags */
         $handleTags = $this->insertFacilityTags($data, $id);
-        if ($handleTags !== true) return (new Exceptions\InternalServerError("Something went wrong inserting the tag: " . $handleTags))->send();
+        if ($handleTags !== true) {
+            return (new Exceptions\InternalServerError("Something went wrong inserting the tag: " . $handleTags))->send();
+        }
 
         
         $status = new Status\Ok(['completed' => $result]);
@@ -204,7 +217,7 @@ class FacilityController extends BaseController {
                     /* Insert the tag if it does not exists */
                     $this->db->executeQuery("INSERT INTO tag (name) VALUES (?)", [trim($tag)]);
                     $tagId = $this->db->getLastInsertedId();
-                } else {
+                } else if(count($existingTag)) {
                     $tagId = $existingTag[0]["id"];
                 }
 
@@ -247,7 +260,7 @@ class FacilityController extends BaseController {
                     strtolower($data->location->phone_number)
                 ]);
 
-            /* If the location doens't exist, create it */
+            /* If the location doens't exist, create it otherwise return the existing location ID */
             if (count($existingLocation) == 0) {
                 $this->db->executeQuery("INSERT INTO location (city, address, zip_code, country, phone_number) VALUES (?, ?, ?, ?, ?)", [
                     $data->location->city, 
