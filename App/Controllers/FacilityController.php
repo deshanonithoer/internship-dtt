@@ -4,7 +4,16 @@ namespace App\Controllers;
 
 use App\Plugins\Http\Response as Status;
 use App\Plugins\Http\Exceptions;
+use App\Plugins\Validator;
 
+/**
+ * Controller to handle all the business logic of facilities.
+ * 
+ * @author: Shano Nithoer
+ * @date:   2022-06-26
+ * @version: 1.0.0
+ * @license: MIT
+ */
 class FacilityController extends BaseController {
     /**
      * Function to retrieve all facilities
@@ -22,7 +31,8 @@ class FacilityController extends BaseController {
         $params = [];
 
         /* Build the query */
-        foreach($search as $key => $column){
+        foreach($search as $key => $column)
+        {
             if (isset($_GET[$key]) === false) {
                 continue;
             }
@@ -60,7 +70,13 @@ class FacilityController extends BaseController {
      */
     public function show(int $id): object 
     {
-        $result = $this->db->fetchQuery("SELECT * FROM facility WHERE id = ?", [$id]);
+        $result = $this->db->fetchQuery("
+            SELECT 
+                facility.*,
+                location.city  
+            FROM facility 
+            LEFT JOIN location ON facility.location_id = location.id
+            WHERE facility.id = ?", [$id]);
         $result = $this->getFacilityTags($result);
 
         $status = new Status\Ok($result);
@@ -72,15 +88,15 @@ class FacilityController extends BaseController {
      * Function to create a new facility with the corresponding tags
      * @return object - Boolean true if the store was successful, otherwise the error message
      */
-    public function store(): object 
+    public function store(): object | null
     {
         /* Get the post data */
         $data = json_decode(file_get_contents('php://input')); 
         
         /* Validate the post data */
-        $validate = $this->validateObject($data, ["name", "location"]);
-        if ($validate !== true) {
-            return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        $validator = new Validator($data, ["name", "location"]);
+        if ($validator->validate() !== true) {
+            return (new Exceptions\BadRequest($validator->getReason() . " is required!"))->send();
         }
 
         /* Insert the location if needed */
@@ -112,21 +128,27 @@ class FacilityController extends BaseController {
      * @param int $id - The id of the facility to update
      * @return object - Boolean true if the update was successful, otherwise the error message
      */
-    public function update(int $id): object 
+    public function update(int $id): object | null
     {
         $data = json_decode(file_get_contents('php://input'));
 
-        /* Validate the post data */
-        $validate = $this->validateObject($data, ["name", "location_id"]);
-        if ($validate !== true) {
-            return (new Exceptions\BadRequest($validate . " is required!"))->send();
+        /* Check if the facility exists */
+        $result = $this->db->fetchQuery("SELECT * FROM facility WHERE id = ?", [$id]);
+        if (count($result) === 0) {
+            return (new Exceptions\BadRequest("Facility does not exist!"))->send();
         }
 
-        /* Insert the location if needed */
-        $location = $this->insertLocation($data);
+        /* Validate the post data */
+        $validator = new Validator($data, ["name"]);
+        if ($validator->validate() !== true) {
+            return (new Exceptions\BadRequest($validator->getReason() . " is required!"))->send();
+        }
+
+        /* Update / Insert the location if needed */
+        $location = $this->insertLocation($data, $id);
 
         /* Update the facility */
-        $result = $this->db->executeQuery("UPDATE facility SET name = ?, location_id = ? WHERE id = ?", [$data->name, $location, $id]);
+        $result = $this->db->executeQuery("UPDATE facility SET name = ? WHERE id = ?", [$data->name, $id]);
 
         /* Handle the tags */
         $handleTags = $this->insertFacilityTags($data, $id);
@@ -134,7 +156,6 @@ class FacilityController extends BaseController {
             return (new Exceptions\InternalServerError("Something went wrong inserting the tag: " . $handleTags))->send();
         }
 
-        
         $status = new Status\Ok(['completed' => $result]);
         $status->send();
         return $status;
@@ -165,7 +186,8 @@ class FacilityController extends BaseController {
     {
         if (count($facilities)) {
             /* Add the corresponding tags to the facilities */
-            foreach($facilities as $key => $facility) {
+            foreach($facilities as $key => $facility) 
+            {
                 $facilities[$key]["tags"] = $this->db->fetchQuery("
                     SELECT 
                         tag.*
@@ -177,23 +199,6 @@ class FacilityController extends BaseController {
         }
 
         return $facilities;
-    }
-
-    /**
-     * Function to validate the values in the received data
-     * @param object $data - The data to validate
-     * @param array $properties - The properties to validate
-     * @return bool|string - Returns true if all properties are valid or the name of the property that is invalid
-     */
-    private function validateObject(object $data, array $properties): bool|string 
-    {
-        foreach($properties as $property){
-            if (!property_exists($data, $property)){
-                return $property;
-            }
-        }	
-
-        return true;
     }
 
     /**
@@ -210,7 +215,8 @@ class FacilityController extends BaseController {
             /* First delete all the tags for this facility */
             $this->db->executeQuery("DELETE FROM facilitytag WHERE facility_id = ?", [$facilityId]);
 
-            foreach($data->tags as $tag){
+            foreach($data->tags as $tag)
+            {
                 /* Check if the tag already exists */
                 $existingTag = $this->db->fetchQuery("SELECT * FROM tag WHERE name = ?", [trim($tag)]);
                 if (!$existingTag) {
@@ -228,7 +234,9 @@ class FacilityController extends BaseController {
 
                 /* Check if row exists */
                 $existingRow = $this->db->fetchQuery("SELECT * FROM facilitytag WHERE facility_id = ? AND tag_id = ?", [$facilityId, $tagId]);
-                if (count($existingRow) == 0) $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $tagId]);
+                if (count($existingRow) == 0) {
+                    $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $tagId]);
+                }
             }
 
             $this->db->commit();
@@ -242,37 +250,44 @@ class FacilityController extends BaseController {
      * @param object $data - The data received from the client
      * @return bool|int - The id of the location
      */
-    private function insertLocation(object $data): bool|int 
+    private function insertLocation(object $data, int $facilityId = 0): bool|int 
     {
         if (property_exists($data, "location")) {
-            $validate = $this->validateObject($data->location, ["city", "country", "address", "zip_code", "phone_number"]);
-            if ($validate !== true) return (new Exceptions\BadRequest($validate . " is required for the creation of a new location!"))->send();
-
-            /* Check if location exists */
-            $existingLocation = $this->db->fetchQuery("
-                SELECT * FROM location 
-                WHERE LOWER(city) LIKE ? AND LOWER(address) LIKE ? AND LOWER(zip_code) LIKE ? 
-                AND LOWER(country) LIKE ? AND LOWER(phone_number) LIKE ?", [
-                    strtolower($data->location->city), 
-                    strtolower($data->location->address),
-                    strtolower($data->location->zip_code),
-                    strtolower($data->location->country),
-                    strtolower($data->location->phone_number)
-                ]);
-
-            /* If the location doens't exist, create it otherwise return the existing location ID */
-            if (count($existingLocation) == 0) {
-                $this->db->executeQuery("INSERT INTO location (city, address, zip_code, country, phone_number) VALUES (?, ?, ?, ?, ?)", [
-                    $data->location->city, 
-                    $data->location->address,
-                    $data->location->zip_code,
-                    $data->location->country,
-                    $data->location->phone_number
-                ]);
-
-                return $this->db->getLastInsertedId();
-            } else {
-                return $existingLocation[0]["id"];
+            if (gettype($data->location) === "object") {
+                $validator = new Validator($data->location, ["city", "country", "address", "zip_code", "phone_number"]);
+                if ($validator->validate() !== true) {
+                    return (new Exceptions\BadRequest($validator->getReason() . " is required for the creation of a new location!"))->send();
+                }
+    
+                /* Check if location exists */
+                $existingLocation = $this->db->fetchQuery("
+                    SELECT * FROM location 
+                    WHERE LOWER(city) LIKE ? AND LOWER(address) LIKE ? AND LOWER(zip_code) LIKE ? 
+                    AND LOWER(country) LIKE ? AND LOWER(phone_number) LIKE ?", [
+                        strtolower($data->location->city), 
+                        strtolower($data->location->address),
+                        strtolower($data->location->zip_code),
+                        strtolower($data->location->country),
+                        strtolower($data->location->phone_number)
+                    ]);
+    
+                /* If the location doens't exist, create it otherwise return the existing location ID */
+                if (count($existingLocation) == 0) {
+                    $this->db->executeQuery("INSERT INTO location (city, address, zip_code, country, phone_number) VALUES (?, ?, ?, ?, ?)", [
+                        $data->location->city, 
+                        $data->location->address,
+                        $data->location->zip_code,
+                        $data->location->country,
+                        $data->location->phone_number
+                    ]);
+    
+                    return $this->db->getLastInsertedId();
+                } else {
+                    return $existingLocation[0]["id"];
+                }
+            } else if (gettype($data->location) === "integer" && $facilityId > 0){
+                /* Update the location of the facility with the given integer */
+                $this->db->executeQuery("UPDATE facility SET location_id = ? WHERE id = ?", [$data->location, $facilityId]);
             }
         }
 
