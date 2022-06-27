@@ -10,7 +10,8 @@ namespace App\Plugins;
  * @version: 1.0.0 
  * @license: MIT
  */
-class Validator {
+class Validator 
+{
     private object $data;
     private array $properties;
     private string $reason;

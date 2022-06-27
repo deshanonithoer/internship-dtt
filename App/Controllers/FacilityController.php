@@ -14,7 +14,8 @@ use App\Plugins\Validator;
  * @version: 1.0.0
  * @license: MIT
  */
-class FacilityController extends BaseController {
+class FacilityController extends BaseController 
+{
     /**
      * Function to retrieve all facilities
      * @return object Status object with the facilities in an array
@@ -38,7 +39,7 @@ class FacilityController extends BaseController {
             }
 
             /* The tabel and column are injection through my own array ($search) */
-            $query .= " AND " . $key . "." . $column . " LIKE ?";
+            $query .= " AND LOWER(" . $key . "." . $column . ") LIKE LOWER(?)";
 
             /* The user input is being sanitized and bound as a parameter */
             $params[] = "%" . filter_var($_GET[$key], FILTER_SANITIZE_FULL_SPECIAL_CHARS) . "%";
@@ -131,6 +132,9 @@ class FacilityController extends BaseController {
     public function update(int $id): object | null
     {
         $data = json_decode(file_get_contents('php://input'));
+        if (empty($data)) {
+            return (new Exceptions\BadRequest("No data provided!"))->send();
+        }
 
         /* Check if the facility exists */
         $result = $this->db->fetchQuery("SELECT * FROM facility WHERE id = ?", [$id]);
@@ -285,10 +289,21 @@ class FacilityController extends BaseController {
                 } else {
                     return $existingLocation[0]["id"];
                 }
-            } else if (gettype($data->location) === "integer" && $facilityId > 0){
+            } else if (gettype($data->location) === "integer"){
                 /* Update the location of the facility with the given integer */
-                $this->db->executeQuery("UPDATE facility SET location_id = ? WHERE id = ?", [$data->location, $facilityId]);
-            }
+                if ($facilityId > 0) {
+                    /* First check if the location exists */
+                    $existingLocation = $this->db->fetchQuery("SELECT * FROM location WHERE id = ?", [$data->location]);
+                    if (count($existingLocation) == 0) {
+                        return (new Exceptions\BadRequest("The location with id " . $data->location . " does not exist!"))->send();
+                    }
+
+                    $this->db->executeQuery("UPDATE facility SET location_id = ? WHERE id = ?", [$data->location, $facilityId]);
+                    return true;
+                } 
+                
+                return $data->location;
+            } 
         }
 
         return true;
