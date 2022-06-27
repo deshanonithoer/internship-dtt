@@ -22,6 +22,7 @@ class FacilityController extends BaseController
      */
     public function index(): object 
     {
+        $response = [];
         $search = [
             "location" => "city", 
             "facility" => "name",
@@ -45,6 +46,18 @@ class FacilityController extends BaseController
             $params[] = "%" . filter_var($_GET[$key], FILTER_SANITIZE_FULL_SPECIAL_CHARS) . "%";
         }
 
+        /* Set limit */
+        $limit = (isset($_GET["limit"]) !== false) ? filter_var($_GET["limit"], FILTER_SANITIZE_NUMBER_INT) : 10;
+        
+        /* Check if cursor is set */
+        if (isset($_GET["cursor"]) === false) {
+            $cursor = 0;
+        } else {
+            $cursor = $this->fromEncoded($_GET["cursor"]);
+            $query .= " AND facility.id < ?";
+            $params[] = $cursor;
+        }
+
         $result = $this->db->fetchQuery("
             SELECT 
                 facility.*,
@@ -53,15 +66,49 @@ class FacilityController extends BaseController
             LEFT JOIN location ON facility.location_id = location.id
             LEFT JOIN facilitytag ON facility.id = facilitytag.facility_id
             LEFT JOIN tag ON facilitytag.tag_id = tag.id
-            WHERE 1 " . $query . "
-            GROUP BY facility.id"
+            WHERE 1 {$query} 
+            GROUP BY facility.id
+            ORDER BY facility.id DESC
+            LIMIT {$limit}"
             , $params);
 
         $result = $this->getFacilityTags($result);
+        $response["data"] = $result;
+        
+        /* Set the cursor */
+        $response["cursor"] = $this->encode($cursor);
+        if(count($result)) {
+            $response["cursor"] = $this->encode($result[count($result) - 1]["id"]);
+        }
 
-        $status = new Status\Ok($result);
+        $status = new Status\Ok($response);
         $status->send();
         return $status;
+    }
+
+    /**
+     * Get the encoded string representation of the cursor to construct a URL.
+     *
+     * @return string
+     */
+    private function encode(string $cursor)
+    {
+        return str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($cursor)));
+    }
+
+    /**
+     * Get a cursor instance from the encoded string representation.
+     *
+     * @param  string|null  $encodedString
+     * @return static|null
+     */
+    private static function fromEncoded(string $cursor)
+    {
+        if (!is_string($cursor)) {
+            return null;
+        }
+
+        return json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $cursor)), true);;
     }
 
     /**
