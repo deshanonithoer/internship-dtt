@@ -222,24 +222,17 @@ class FacilityController extends BaseController
             foreach($data->tags as $tag)
             {
                 /* Check if the tag already exists */
-                $existingTag = $this->db->fetchQuery("SELECT * FROM tag WHERE name = ?", [trim($tag)]);
-                if (!$existingTag) {
-                    /* Insert the tag if it does not exists */
-                    $this->db->executeQuery("INSERT INTO tag (name) VALUES (?)", [trim($tag)]);
-                    $tagId = $this->db->getLastInsertedId();
-                } else if(count($existingTag)) {
-                    $tagId = $existingTag[0]["id"];
-                }
+                $existingTag = $this->doesTagExist($tag);
 
-                if (!$tagId) {
+                if (!$existingTag) {
                     $this->db->rollBack();
                     return $tag;
                 }
 
                 /* Check if row exists */
-                $existingRow = $this->db->fetchQuery("SELECT * FROM facilitytag WHERE facility_id = ? AND tag_id = ?", [$facilityId, $tagId]);
+                $existingRow = $this->db->fetchQuery("SELECT * FROM facilitytag WHERE facility_id = ? AND tag_id = ?", [$facilityId, $existingTag]);
                 if (count($existingRow) == 0) {
-                    $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $tagId]);
+                    $this->db->executeQuery("INSERT INTO facilitytag (facility_id, tag_id) VALUES (?, ?)", [$facilityId, $existingTag]);
                 }
             }
 
@@ -247,6 +240,24 @@ class FacilityController extends BaseController
         }
 
         return true;
+    }
+
+    /**
+     * Function to check if a tag exists
+     * @param string $tag - The tag name to check
+     * @return bool - Returns the tag ID if the tag exists, otherwise false
+     */
+    private function doesTagExist(string $tagName): int | bool {
+        $existingTag = $this->db->fetchQuery("SELECT * FROM tag WHERE name = ?", [trim($tagName)]);
+        if (!$existingTag) {
+            /* Insert the tag if it does not exists */
+            $this->db->executeQuery("INSERT INTO tag (name) VALUES (?)", [trim($tagName)]);
+            return $this->db->getLastInsertedId();
+        } else if(count($existingTag)) {
+            return $existingTag[0]["id"];
+        }
+
+        return false;
     }
 
     /**
