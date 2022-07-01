@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "06ecf6e5-95c8-4c6a-8245-fcb12d1c3cb6",
+		"name": "DTT",
+		"description": "This is a Rest API created by Renesh Shano Nithoer for the company DTT as an internship assignment. Every route should be well documented and testable. Every route has its own documentation section where I will explain what the route can do and what the user can execute.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "6174648"
+	},
+	"item": [
+		{
+			"name": "GET",
+			"item": [
+				{
+					"name": "Index page",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost",
+							"host": [
+								"localhost"
+							]
+						},
+						"description": "This is the startup page of the api. There is no logic behind this route because it does nothing."
+					},
+					"response": []
+				},
+				{
+					"name": "Fetch all facilities",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility"
+							]
+						},
+						"description": "This route fetches all the facilities with their location and tags. "
+					},
+					"response": []
+				},
+				{
+					"name": "Fetch a specific facility",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility/66",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility",
+								"66"
+							]
+						},
+						"description": "Use the route /facility/{id} to fetch a specific facility with the location and tags."
+					},
+					"response": []
+				},
+				{
+					"name": "Filter the facilities",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility?facility=test&location=utrecht&tag=test",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility"
+							],
+							"query": [
+								{
+									"key": "facility",
+									"value": "test"
+								},
+								{
+									"key": "location",
+									"value": "utrecht"
+								},
+								{
+									"key": "tag",
+									"value": "test"
+								}
+							]
+						},
+						"description": "With this route the user is able to filter the results based on 3 parameters. It is not case-sensitive.\n\n1.  Facility = The name of the facility\n2.  Location = The city of the location belonging to the facility\n3.  Tag = The tag name belonging to a facility"
+					},
+					"response": []
+				},
+				{
+					"name": "Set limit for results",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility?limit=2",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "2"
+								}
+							]
+						},
+						"description": "The user is able to give a limit. This will be the amount of results the user will receive. After the request has loaded, the user receives an array with 2 keys: data and cursor.\n\nThe data key contains the results. The cursor key contains an encoded string that represent the last item from the results. This is used to fetch the next page, as explained in the next route (Next page with cursor pagination)."
+					},
+					"response": []
+				},
+				{
+					"name": "Next page with cursor pagination",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility?limit=2&cursor=IjcyIg",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "2"
+								},
+								{
+									"key": "cursor",
+									"value": "IjcyIg"
+								}
+							]
+						},
+						"description": "The user can use the received cursor from the previous request in the url as a parameter. This lets the server know what the last item was and fetch the items after it."
+					},
+					"response": []
+				}
+			],
+			"description": "These are all the GET requests the API is capable of."
+		},
+		{
+			"name": "POST",
+			"item": [
+				{
+					"name": "Create a new facility (with existing location)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"name\": \"Test facility 4\",\r\n    \"location\": 15,\r\n    \"tags\": [\"Test tag 1\", \"Test tag 2\", \"Test tag 3\"]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost/facility",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility"
+							]
+						},
+						"description": "To create new facility, the user is able to make a post request to this url. The API expects a json body in the request. The keys are explained below:\n\n*   Name = The name of the facility\n*   Location = The location of the city, more explanation in the next paragraph\n*   Tags = An array of strings that represent the tag names. If the tag name equals an existing tag, the existing tag will be used.\n    \n\n**Location**\n\nThe location parameter has 2 functionalities. The user is able to send an **object** or **int**. More explanation below:\n\n*   Object = If the object contains the required keys for a location (city, address, zip code, country code and phone number), it will be validated to see if the location already exists. If the location doesn't exist, it will be created. If the location does exist, it will not be created and the existing location will be used.\n    \n\n``` json\n{\n    \"name\": \"The name of the facility\",\n    \"location\": {\n        \"city\": \"The name of the city\",\n         \"address\": \"The address\",\n         \"zip_code\": \"The zip code (1010 AA)\",\n         \"country\": \"The country code (NL)\"\n    },\n    \"tags\": [\n        \"Test tag 1\", \n        \"Test tag 2\", \n        \"Test tag 3\"\n    ]\n}\n\n```\n\n*   Int = The int should represent a facility ID. If the ID doesn't exist, the user will get an error 400 with a status message that the location doesn't exist. If the ID does exist, it will be assigned to the location."
+					},
+					"response": []
+				}
+			],
+			"description": "These are all the post requests the API is capable of."
+		},
+		{
+			"name": "PUT",
+			"item": [
+				{
+					"name": "Update the facility",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"name\": \"Test facility #4\",\r\n    \"location\": 16,\r\n    \"tags\": [\"Test tag 1\"]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost/facility/69",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility",
+								"69"
+							]
+						},
+						"description": "With this route, the user is able to update a facility. The user is able to update the following attributes:\n\n1.  Name = The name of the facility\n2.  Location = The location of the facility. This can be an int or object. If it is an object, the same process will be executed as explained in the POST request documentation. If it is an int, the relation will be updated.\n3.  Tags = The tags belonging to this facility. If the user gives a empty array, the facility will have no tags."
+					},
+					"response": []
+				}
+			],
+			"description": "These are all the PUT requests the API is capable of."
+		},
+		{
+			"name": "DELETE",
+			"item": [
+				{
+					"name": "Delete a facility",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "localhost/facility/69",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"facility",
+								"69"
+							]
+						},
+						"description": "This route deletes a facility with the given ID. It returns a boolean determining whether the operation was a success."
+					},
+					"response": []
+				}
+			],
+			"description": "These are all the DELETE requests the API is capable of."
+		}
+	]
+}
